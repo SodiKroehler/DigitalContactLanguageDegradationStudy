@@ -1,0 +1,237 @@
+---
+title: "lang_degrad_eda"
+author: "Kroehler, Sodi"
+date: "4/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## CS1699 Final Project Exploratory Data Analysis Markup
+
+```{r, load_packages}
+library(tidyverse)
+library(ggdark)
+library(gganimate)
+```
+
+```{r, import data}
+file = "./processed_tweets_01.csv"
+df_raw <- readr::read_delim(file, delim = ",", col_names = TRUE,locale = locale(encoding = "utf-16"))
+df_raw %>% glimpse()
+```
+```{r}
+df_all <- df_raw %>% 
+  mutate(Date = as.Date(date),
+         cother = as.integer(str_extract(str_extract(counts, ".other.. \\d*"), " \\d*")),
+         cen = as.integer(str_extract(str_extract(counts, "en.. \\d*"), " \\d*")),
+         chin = as.integer(str_extract(str_extract(counts, "hin.. \\d*"), " \\d*")),
+         cfw = as.integer(str_extract(str_extract(counts, "fw.. \\d*"), " \\d*")),
+         cne = as.integer(str_extract(str_extract(counts, "ne.. \\d*"), " \\d*"))) %>% 
+  select(Date, cother,cen,chin,cfw,cne,lang)
+df_all$cother[is.na(df_all$cother)] <- 0
+df_all$cen[is.na(df_all$cen)] <- 0
+df_all$chin[is.na(df_all$chin)] <- 0
+df_all$cfw[is.na(df_all$cfw)] <- 0
+df_all$cne[is.na(df_all$cne)] <- 0
+df_all %>% head()
+```
+```{r}
+df_cs <- df_all %>% 
+  mutate(percEN = cen/(cen+chin+cfw+cother+cne),
+         percHIN = chin/(cen+chin+cfw+cother+cne)) %>% 
+  select(Date, percEN, percHIN, lang)
+df_grand_all <- df_cs %>% group_by(Date) %>% 
+  summarise(mean_percEN = mean(percEN),
+            mean_percHIN = mean(percHIN),)
+df_grand_all %>% head()
+```
+```{r}
+my_processFile <- function(filename){
+  df_raw <- readr::read_delim(filename, delim = ",", col_names = TRUE,locale = locale(encoding = "utf-16"))
+  df_all <- df_raw %>% 
+    mutate(Date = as.Date(date),
+         cother = as.integer(str_extract(str_extract(counts, ".other.. \\d*"), " \\d*")),
+         cen = as.integer(str_extract(str_extract(counts, "en.. \\d*"), " \\d*")),
+         chin = as.integer(str_extract(str_extract(counts, "hin.. \\d*"), " \\d*")),
+         cfw = as.integer(str_extract(str_extract(counts, "fw.. \\d*"), " \\d*")),
+         cne = as.integer(str_extract(str_extract(counts, "ne.. \\d*"), " \\d*"))) %>% 
+    select(Date, cother,cen,chin,cfw,cne,lang)
+  
+  df_all$cother[is.na(df_all$cother)] <- 0
+  df_all$cen[is.na(df_all$cen)] <- 0
+  df_all$chin[is.na(df_all$chin)] <- 0
+  df_all$cfw[is.na(df_all$cfw)] <- 0
+  df_all$cne[is.na(df_all$cne)] <- 0
+  df_all %>% head()
+  
+  df_cs <- df_all %>% 
+  mutate(percEN = cen/(cen+chin+cfw+cother+cne),
+         percHIN = chin/(cen+chin+cfw+cother+cne)) %>% 
+    group_by(Date) %>% 
+    summarise(mean_percEN = mean(percEN),
+            mean_percHIN = mean(percHIN),)
+}
+```
+```{r}
+file1 <- my_processFile("./processed_tweets_01.csv")
+file1 %>% head()
+file2 <- my_processFile("./processed_tweets_02.csv")
+file2 %>% head()
+file3 <- my_processFile("./processed_tweets_03.csv")
+file3 %>% head()
+file4 <- my_processFile("./processed_tweets_04.csv")
+file4 %>% head()
+file5 <- my_processFile("./processed_tweets_05.csv")
+file5 %>% head()
+file6 <- my_processFile("./INCOMPLETE_processed_tweets_06.csv")
+file6 %>% head()
+```
+```{r}
+grand_df_all <- bind_rows(file1, file2, file3, file4, file5, file6)
+grand_df_all %>% 
+  ggplot(mapping = aes(x = Date)) +
+  geom_point(aes(y = mean_percEN)) +
+  geom_point(aes(y = mean_percHIN), color = "red")+
+  dark_theme_gray()
+```
+```{r}
+grand_df_all %>% 
+  pivot_longer(c(mean_percEN, mean_percHIN), names_to = "language", values_to = "percentage") %>% 
+  ggplot(mapping = aes(x = language)) +
+  geom_bar() +
+  labs(title = 'Year: {Date}', x = 'Percentage of English per Tweet', y = 'Percentage of Hindi per Tweet') +
+  transition_time(Date) +
+  ease_aes('linear') +
+  dark_theme_gray()
+```
+```{r}
+filename = "./data/by_milestones.csv"
+milestones_raw <- readr::read_csv(filename, col_names = TRUE,locale = locale(encoding = "utf-16") )
+milestones_raw %>% mutate(
+  lat = as.double(str_sub(str_match(geo, "\\[\\d*.\\d*"), 2, -1L))) %>% 
+  head()
+```
+```{r}
+processMilestones <-function(filename){
+  milestones_raw <- readr::read_csv(filename, col_names = TRUE,locale = locale(encoding = "utf-16") )
+  df <- milestones_raw %>% 
+    mutate(point = as.Date(point),
+           date = as.Date(date),
+           lat = as.double(str_sub(str_match_all(geo, "\\[\\d*.\\d*"), 2, -1L)),
+           long = as.double(str_sub(str_match(geo, "\\d*.\\d*\\]"), 1, -2L))) 
+  df %>% group_by(point) %>% 
+    mutate(percEN = mean(cEN/cTOTAL),
+           percHIN = mean(cHIN/cTOTAL)) %>% 
+    select(city, point, percEN, percHIN)
+}
+
+```
+```{r}
+mile1 <- processMilestones("./data/by_milestones.csv")
+mile2 <- processMilestones("./data/by_milestones_2.csv")
+mile3 <- processMilestones("./data/by_milestones_3.csv")
+
+grand_df_miles <- bind_rows(mile1, mile2, mile3)
+grand_df_miles %>% head()
+```
+```{r}
+grand_df_miles %>% 
+  ggplot(mapping = aes(x = point)) +
+  geom_point(aes(y = percEN)) + 
+  geom_point(aes(y = percHIN), color = "red") + 
+  facet_wrap(~city) +
+  dark_theme_gray()
+```
+```{r}
+grand_df_miles %>% 
+  ggplot(mapping = aes(x = point)) +
+  geom_smooth(aes(y = percEN), color = "white") +
+  geom_smooth(aes(y = percHIN), color = "red") +
+  facet_wrap(~city) +
+  dark_theme_gray()
+```
+```{r}
+grand_df_miles_avg <- grand_df_miles %>% 
+  group_by(point) %>% 
+  select(point, percEN,percHIN) %>% 
+  mutate(avg_percEN = mean(percEN),
+         avg_percHIN = mean(percHIN),)
+grand_df_miles_avg %>%  
+  ggplot(mapping = aes(x = point)) +
+  geom_smooth(aes(y = avg_percEN), color = "white") +
+  geom_smooth(aes(y = avg_percHIN), color = "red") +
+  geom_vline(xintercept = as.Date("2014-11-06")) +
+  geom_vline(xintercept = as.Date("2017-10-04")) +
+  geom_vline(xintercept = as.Date("2020-09-04")) +
+  #geom_smooth(aes(y = percHIN), color = "red") +
+  dark_theme_gray()
+```
+```{r, combine_with_other_datasets}
+great_grand_df <- grand_df_all %>% 
+  mutate(point = Date,
+         avg_percEN = mean_percEN,
+         avg_percHIN = mean_percHIN) %>% 
+  select(point, avg_percEN, avg_percHIN) %>% 
+  bind_rows(grand_df_miles_avg)
+great_grand_df %>%
+  ggplot(mapping = aes(x = point)) +
+  #geom_smooth(aes(y = avg_percEN), color = "white") +
+  #geom_smooth(aes(y = avg_percHIN), color = "red") +
+  geom_point(aes(y = avg_percHIN), alpha = 0.3) + 
+  geom_point(aes(y = percHIN), color = "red") + 
+  geom_vline(xintercept = as.Date("2014-11-06")) +
+  geom_vline(xintercept = as.Date("2017-10-04")) +
+  geom_vline(xintercept = as.Date("2020-09-04")) +
+  #geom_smooth(aes(y = percHIN), color = "red") +
+  dark_theme_gray()
+```
+
+```{r, find_missing_vals}
+fDate <- as.Date("1970-01-01")
+df1 <- grand_df_miles %>% select(city, point)
+df2 <- df1 %>% count(city, point)
+missed <- df2 %>%  select(city, point, n) %>% pivot_wider(names_from = city, values_from = n)
+missed %>% is.na()
+```
+```{r}
+#incomps <- df2 %>% mutate(incomp = (n == 100 | n == 50)) %>%  filter(incomp == FALSE)
+incomps <- df2 %>% mutate(incomp = (n == 100 | n == 50)) %>%
+  select(city, point, incomp) %>% 
+  pivot_wider(names_from = city, values_from = incomp)
+incomps
+```
+
+
+```{r, city_information}
+df <- readr::read_csv("./india_states_capitals.csv", col_names = TRUE)
+df <- df[c(0:13),] %>% mutate(pop = as.integer(Population),
+                              i = rownames(df), 
+                              city = LargestCity) %>% 
+  select(i, city, pop)
+df %>% head()
+grand_df_miles <- grand_df_miles %>% mutate(cityName = "")
+named_grand_miles  <- grand_df_miles[df, on = (i = city)]
+```
+
+```{r}
+
+IIIT_Delhi_POS_CS_filename <- "./data/POS Hindi English Code Mixed Tweets.tsv"
+IIIT_POS_CS_full <- readr::read_tsv(IIIT_Delhi_POS_CS_filename, col_names = c("token", "lang", "POS"))
+IIIT_POS_CS <- IIIT_POS_CS_full %>% 
+                    filter(lang != "rest")
+IIIT_POS_CS %>% glimpse()
+```
+```{r}
+td = as.Date('2016/06/05') - as.Date('2017/08/09')
+as.Date('1999/01/01') + sample(0:td, 12)
+```
+
+
+
+
+
+
+
